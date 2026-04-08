@@ -4,12 +4,13 @@ import { DropZone } from "@/components/upload/DropZone";
 import { ImagePreviewGrid } from "@/components/upload/ImagePreviewGrid";
 import { Button } from "@/components/ui/button";
 import { fileToBase64, resizeImageClient, generateId } from "@/lib/image-utils";
-import { ArrowRight } from "lucide-react";
+import { ArrowRight, Loader2 } from "lucide-react";
 import { useState } from "react";
 
 export function StepUpload() {
   const { uploadedImages, addImages, removeImage, nextStep } = useCarouselStore();
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   const handleFiles = async (files: File[]) => {
     const remaining = 10 - uploadedImages.length;
@@ -17,20 +18,29 @@ export function StepUpload() {
     if (toProcess.length === 0) return;
 
     setLoading(true);
-    const processed = await Promise.all(
-      toProcess.map(async (file) => {
+    setError(null);
+
+    const results = [];
+    for (const file of toProcess) {
+      try {
         const resized = await resizeImageClient(file);
         const { base64, mimeType } = await fileToBase64(resized);
-        return {
+        results.push({
           id: generateId(),
           base64,
           mimeType,
           filename: file.name,
           previewUrl: `data:${mimeType};base64,${base64}`,
-        };
-      })
-    );
-    addImages(processed);
+        });
+      } catch (err) {
+        console.error(`Failed to process ${file.name}:`, err);
+        setError(`Falha ao processar ${file.name}. Tente outro formato.`);
+      }
+    }
+
+    if (results.length > 0) {
+      addImages(results);
+    }
     setLoading(false);
   };
 
@@ -44,6 +54,18 @@ export function StepUpload() {
       </div>
 
       <DropZone onFiles={handleFiles} disabled={loading || uploadedImages.length >= 10} />
+
+      {loading && (
+        <div className="flex items-center gap-2 text-sm text-muted-foreground">
+          <Loader2 className="w-4 h-4 animate-spin" />
+          Processando imagens...
+        </div>
+      )}
+
+      {error && (
+        <p className="text-sm text-destructive">{error}</p>
+      )}
+
       <ImagePreviewGrid images={uploadedImages} onRemove={removeImage} />
 
       {uploadedImages.length > 0 && (

@@ -1,6 +1,7 @@
 "use client";
 import { useCallback, useState } from "react";
 import { Upload, ImagePlus } from "lucide-react";
+import { isImageFile } from "@/lib/image-utils";
 
 interface DropZoneProps {
   onFiles: (files: File[]) => void;
@@ -24,9 +25,7 @@ export function DropZone({ onFiles, disabled }: DropZoneProps) {
       e.preventDefault();
       setIsDragging(false);
       if (disabled) return;
-      const files = Array.from(e.dataTransfer.files).filter((f) =>
-        f.type.startsWith("image/")
-      );
+      const files = Array.from(e.dataTransfer.files).filter(isImageFile);
       if (files.length > 0) onFiles(files);
     },
     [onFiles, disabled]
@@ -37,9 +36,9 @@ export function DropZone({ onFiles, disabled }: DropZoneProps) {
     const input = document.createElement("input");
     input.type = "file";
     input.multiple = true;
-    input.accept = "image/*";
+    input.accept = "image/*,.heic,.heif";
     input.onchange = () => {
-      const files = Array.from(input.files || []);
+      const files = Array.from(input.files || []).filter(isImageFile);
       if (files.length > 0) onFiles(files);
     };
     input.click();
@@ -69,7 +68,7 @@ export function DropZone({ onFiles, disabled }: DropZoneProps) {
             {isDragging ? "Solte as imagens aqui" : "Arraste imagens ou clique para selecionar"}
           </p>
           <p className="text-sm text-muted-foreground mt-1">
-            JPG, PNG, WebP - Max 10 imagens, 10MB cada
+            JPG, PNG, WebP, HEIC - Max 10 imagens, 10MB cada
           </p>
         </div>
       </div>
