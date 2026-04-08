@@ -3,7 +3,7 @@ import { useCarouselStore } from "@/hooks/useCarouselStore";
 import { DropZone } from "@/components/upload/DropZone";
 import { ImagePreviewGrid } from "@/components/upload/ImagePreviewGrid";
 import { Button } from "@/components/ui/button";
-import { fileToBase64, resizeImageClient, generateId } from "@/lib/image-utils";
+import { fileToBase64, processImage, generateId } from "@/lib/image-utils";
 import { ArrowRight, Loader2 } from "lucide-react";
 import { useState } from "react";
 
@@ -23,7 +23,7 @@ export function StepUpload() {
     const results = [];
     for (const file of toProcess) {
       try {
-        const resized = await resizeImageClient(file);
+        const resized = await processImage(file);
         const { base64, mimeType } = await fileToBase64(resized);
         results.push({
           id: generateId(),

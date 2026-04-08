@@ -2,7 +2,21 @@ export function generateId(): string {
   return Math.random().toString(36).substring(2, 15);
 }
 
-const SUPPORTED_OUTPUT_TYPE = "image/jpeg";
+const OUTPUT_TYPE = "image/jpeg";
+
+function isHeic(file: File): boolean {
+  if (file.type === "image/heic" || file.type === "image/heif") return true;
+  const ext = file.name.toLowerCase().split(".").pop();
+  return ext === "heic" || ext === "heif";
+}
+
+async function convertHeicToJpeg(file: File): Promise<File> {
+  const heic2any = (await import("heic2any")).default;
+  const blob = await heic2any({ blob: file, toType: OUTPUT_TYPE, quality: 0.955 });
+  const resultBlob = Array.isArray(blob) ? blob[0] : blob;
+  const newName = file.name.replace(/\.[^.]+$/, ".jpg");
+  return new File([resultBlob], newName, { type: OUTPUT_TYPE });
+}
 
 export async function fileToBase64(file: File): Promise<{ base64: string; mimeType: string }> {
   return new Promise((resolve, reject) => {
@@ -10,7 +24,7 @@ export async function fileToBase64(file: File): Promise<{ base64: string; mimeTy
     reader.onload = () => {
       const dataUrl = reader.result as string;
       const base64 = dataUrl.split(",")[1];
-      const mimeType = dataUrl.split(";")[0].split(":")[1] || SUPPORTED_OUTPUT_TYPE;
+      const mimeType = dataUrl.split(";")[0].split(":")[1] || OUTPUT_TYPE;
       resolve({ base64, mimeType });
     };
     reader.onerror = () => reject(new Error("Failed to read file"));
@@ -19,19 +33,28 @@ export async function fileToBase64(file: File): Promise<{ base64: string; mimeTy
 }
 
 export function isImageFile(file: File): boolean {
-  // Check MIME type
   if (file.type && file.type.startsWith("image/")) return true;
-  // Fallback: check extension for mobile browsers that don't set type
   const ext = file.name.toLowerCase().split(".").pop();
   const imageExtensions = ["jpg", "jpeg", "png", "webp", "gif", "heic", "heif", "bmp", "tiff", "avif"];
   return imageExtensions.includes(ext || "");
 }
 
-export async function resizeImageClient(file: File, maxDimension = 1500): Promise<File> {
-  // Always convert to JPEG via canvas to handle HEIC, HEIF, and other exotic formats
-  return new Promise((resolve) => {
+export async function processImage(file: File, maxDimension = 2048): Promise<File> {
+  // Step 1: Convert HEIC/HEIF to JPEG first
+  let workingFile = file;
+  if (isHeic(file)) {
+    try {
+      workingFile = await convertHeicToJpeg(file);
+    } catch (err) {
+      console.error("HEIC conversion failed:", err);
+      throw new Error(`Nao foi possivel converter ${file.name}. Tente salvar como JPG antes de enviar.`);
+    }
+  }
+
+  // Step 2: Resize and normalize to JPEG via canvas
+  return new Promise((resolve, reject) => {
     const img = new window.Image();
-    const url = URL.createObjectURL(file);
+    const url = URL.createObjectURL(workingFile);
 
     img.onload = () => {
       URL.revokeObjectURL(url);
@@ -46,28 +69,23 @@ export async function resizeImageClient(file: File, maxDimension = 1500): Promis
       const ctx = canvas.getContext("2d")!;
       ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
 
-      // Always output as JPEG (universally supported by all browsers)
       canvas.toBlob(
         (blob) => {
           if (blob) {
-            const newName = file.name.replace(/\.[^.]+$/, ".jpg");
-            resolve(new File([blob], newName, { type: SUPPORTED_OUTPUT_TYPE }));
+            const newName = workingFile.name.replace(/\.[^.]+$/, ".jpg");
+            resolve(new File([blob], newName, { type: OUTPUT_TYPE }));
           } else {
-            // Fallback: return original file
-            resolve(file);
+            resolve(workingFile);
           }
         },
-        SUPPORTED_OUTPUT_TYPE,
-        0.9
+        OUTPUT_TYPE,
+        0.95
       );
     };
 
     img.onerror = () => {
       URL.revokeObjectURL(url);
-      // If the browser can't decode the image (e.g., HEIC on some browsers),
-      // try reading it as-is and let the server handle conversion
-      console.warn(`Browser cannot decode ${file.name}, using original file`);
-      resolve(file);
+      reject(new Error(`Nao foi possivel processar ${file.name}. Formato nao suportado.`));
     };
 
     img.src = url;
