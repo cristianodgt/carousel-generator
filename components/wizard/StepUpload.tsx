@@ -33,9 +33,9 @@ export function StepUpload() {
           filename,
           previewUrl: `data:${mimeType};base64,${base64}`,
         });
-      } catch (err) {
-        console.error(`Failed to process ${file.name}:`, err);
-        const msg = err instanceof Error ? err.message : "Formato nao suportado";
+      } catch (err: unknown) {
+        const msg = err instanceof Error ? err.message : String(err);
+        console.error(`[Upload] Failed ${file.name}:`, msg, err);
         setError(`${file.name}: ${msg}`);
       }
     }
