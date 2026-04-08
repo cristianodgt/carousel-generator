@@ -62,16 +62,21 @@ export function StepGenerate() {
         updateSlide(slide.id, { status: "generating" });
 
         try {
+          // Send the reference image for this specific slide (distribute across slides)
+          // Plus 1-2 others for style consistency
+          const primaryImageIndex = i % uploadedImages.length;
+          const slideRefImages = [
+            uploadedImages[primaryImageIndex],
+            ...uploadedImages.filter((_, idx) => idx !== primaryImageIndex).slice(0, 1),
+          ].map((img) => ({ base64: img.base64, mimeType: img.mimeType }));
+
           const imageRes = await fetch("/api/generate-image", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
               prompt: slide.imagePrompt,
-              referenceImages: uploadedImages.slice(0, 2).map((img) => ({
-                base64: img.base64,
-                mimeType: img.mimeType,
-              })),
-              previousSlides: generatedImages.slice(-2),
+              referenceImages: slideRefImages,
+              previousSlides: generatedImages.slice(-1),
               brandColors: config.brandColors,
               format: config.format,
             }),

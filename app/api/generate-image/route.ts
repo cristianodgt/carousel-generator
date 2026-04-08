@@ -13,9 +13,9 @@ export async function POST(request: Request) {
     // Build content parts: reference images + previous slides for consistency + prompt
     const parts: Array<{ inlineData: { mimeType: string; data: string } } | { text: string }> = [];
 
-    // Add reference images (original uploads) for context
+    // Add reference images (original uploads) for context - send all for variety
     if (referenceImages && referenceImages.length > 0) {
-      for (const img of referenceImages.slice(0, 2)) {
+      for (const img of referenceImages) {
         parts.push({
           inlineData: { mimeType: img.mimeType, data: img.base64 },
         });

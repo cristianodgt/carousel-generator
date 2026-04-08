@@ -40,27 +40,22 @@ Generate a JSON array of ${config.slideCount} slide objects. Each slide must hav
 1. **title**: Short, impactful title for the slide (max 6 words). This will be overlaid on the image.
 2. **body**: Supporting text (max 20 words). This will be overlaid on the image.
 3. **cta**: Call-to-action text for the last slide only (max 4 words), empty string for other slides.
-4. **imagePrompt**: A DETAILED structured prompt for generating the slide image using Gemini image generation. Follow the 7-component formula:
+4. **imagePrompt**: A DETAILED description of how to enhance and style this slide's photo. Think of it as a photo retouching and styling brief.
 
-For each imagePrompt, write it as a JSON object with these fields:
-- instruction: One-line description of the scene
-- subject: What appears in the image (specific details, materials, textures)
-- scene: Setting, key elements, background, foreground
-- lighting: Light source, direction, quality, color temperature
-- composition: Shot type (close-up, wide, overhead), camera angle
-- mood: Atmosphere and feeling
-- color_palette: Use the brand colors: ${config.brandColors.join(', ')}
-- style: "${config.tone}" aesthetic, modern social media design
-- negative: "sharp focus throughout, clean composition, professional quality"
+For each imagePrompt, describe:
+- Which reference photo to use: Specify which uploaded image/pose to feature (distribute evenly across slides - use ALL uploaded images, not just 1-2)
+- Enhancement: How to improve lighting (studio softbox, rim light, natural window light), color grading (warm, cool, vibrant)
+- Background: How to clean/improve the background (blur, replace with clean studio backdrop, simplify)
+- Styling: Any styling changes (better composition, crop, angle, props)
+- Mood: "${config.tone}" aesthetic feel
+- Color accent: How to subtly incorporate brand colors ${config.brandColors.join(', ')}
 
 IMPORTANT RULES for imagePrompt:
-- Do NOT include any text in the image description - text is overlaid separately
-- Do NOT use keywords like "4K", "8K", "masterpiece", "best quality", "trending on ArtStation"
-- Use specific sensory details (textures, materials, temperatures)
-- Each slide should feel connected but distinct
-- Maintain visual consistency across all slides
-- Use narrative prose, not comma-separated tags
-- Max 200 words per imagePrompt
+- Each slide must feature a DIFFERENT reference photo/look — distribute ALL uploaded images across slides
+- Describe photo enhancements, not graphic designs
+- Do NOT include any text, letters, words or numbers in the image
+- Focus on making the photos look like professional studio/editorial shots
+- Max 150 words per imagePrompt
 
 ## Slide Structure Guidelines
 - Slide 1: Hook/Cover - Most attention-grabbing, establishes the topic
@@ -74,18 +69,24 @@ Return ONLY a valid JSON array, no markdown fences. Example format:
 export function buildImageGenPrompt(imagePromptJson: string, brandColors: string[], format: 'square' | 'portrait'): string {
   const aspectRatio = format === 'square' ? '1:1' : '4:5';
 
-  return `Generate a professional social media carousel slide image based on this creative brief:
+  return `You are a professional photographer and retoucher creating stunning Instagram carousel slides.
 
+Creative brief for this slide:
 ${imagePromptJson}
 
-Technical requirements:
+PHOTO ENHANCEMENT & STYLING REQUIREMENTS:
+- Take the reference photos and ENHANCE them to look like professional studio photography
+- Improve lighting: add soft, even studio lighting with gentle fill light and subtle rim/hair light
+- Improve colors: vibrant but natural color grading, warm skin tones, rich fabric colors
+- Clean up the background: make it cleaner, more professional, less cluttered
+- Improve composition: center the subject, use rule of thirds, ensure proper framing
+- Add subtle professional retouching: smooth skin, enhance details, reduce distractions
+- Brand color palette: ${brandColors.join(', ')} — incorporate these as accent colors in the environment, props, or color grading
 - Aspect ratio: ${aspectRatio}
-- Brand color palette: ${brandColors.join(', ')}
-- Style: Modern, clean, professional social media design
-- The image must have NO text, NO letters, NO words, NO numbers rendered in it
-- Leave space at the bottom third for text overlay (slightly darker/gradient area)
-- Sharp focus throughout, clean composition
-- Professional quality suitable for Instagram
+- Each slide should feature a DIFFERENT reference photo/pose — use ALL uploaded images across the carousel
+- The overall feel should be like a high-end fashion/product lookbook or e-commerce shoot
+- The image must contain absolutely NO text, NO letters, NO words, NO numbers
+- Leave the bottom 25% slightly darker (natural vignette or gradient) for text overlay
 
-Generate the image now.`;
+Generate the enhanced studio-quality photo now.`;
 }
