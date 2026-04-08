@@ -3,13 +3,14 @@ import { useCarouselStore } from "@/hooks/useCarouselStore";
 import { DropZone } from "@/components/upload/DropZone";
 import { ImagePreviewGrid } from "@/components/upload/ImagePreviewGrid";
 import { Button } from "@/components/ui/button";
-import { fileToBase64, processImage, generateId } from "@/lib/image-utils";
+import { processImage, generateId } from "@/lib/image-utils";
 import { ArrowRight, Loader2 } from "lucide-react";
 import { useState } from "react";
 
 export function StepUpload() {
   const { uploadedImages, addImages, removeImage, nextStep } = useCarouselStore();
   const [loading, setLoading] = useState(false);
+  const [processingFile, setProcessingFile] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   const handleFiles = async (files: File[]) => {
@@ -23,18 +24,19 @@ export function StepUpload() {
     const results = [];
     for (const file of toProcess) {
       try {
-        const resized = await processImage(file);
-        const { base64, mimeType } = await fileToBase64(resized);
+        setProcessingFile(file.name);
+        const { base64, mimeType, filename } = await processImage(file);
         results.push({
           id: generateId(),
           base64,
           mimeType,
-          filename: file.name,
+          filename,
           previewUrl: `data:${mimeType};base64,${base64}`,
         });
       } catch (err) {
         console.error(`Failed to process ${file.name}:`, err);
-        setError(`Falha ao processar ${file.name}. Tente outro formato.`);
+        const msg = err instanceof Error ? err.message : "Formato nao suportado";
+        setError(`${file.name}: ${msg}`);
       }
     }
 
@@ -42,6 +44,7 @@ export function StepUpload() {
       addImages(results);
     }
     setLoading(false);
+    setProcessingFile(null);
   };
 
   return (
@@ -58,7 +61,7 @@ export function StepUpload() {
       {loading && (
         <div className="flex items-center gap-2 text-sm text-muted-foreground">
           <Loader2 className="w-4 h-4 animate-spin" />
-          Processando imagens...
+          Convertendo {processingFile}...
         </div>
       )}
 
