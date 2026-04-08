@@ -58,10 +58,14 @@ export async function POST(request: Request) {
     }
 
     throw new Error("No image generated in response");
-  } catch (error) {
-    console.error("Image generation error:", error);
+  } catch (error: unknown) {
+    const msg = error instanceof Error ? error.message : String(error);
+    console.error("[generate-image] Error:", msg);
+    const apiError = error as Record<string, unknown>;
+    if (apiError.status) console.error("[generate-image] Status:", apiError.status);
+    if (apiError.errorDetails) console.error("[generate-image] Details:", JSON.stringify(apiError.errorDetails));
     return NextResponse.json(
-      { error: "Failed to generate image" },
+      { error: `Image generation failed: ${msg}` },
       { status: 500 }
     );
   }
