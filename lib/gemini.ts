@@ -10,6 +10,6 @@ export function getGeminiClient(): GoogleGenAI {
 }
 
 export const MODELS = {
-  text: "gemini-2.0-flash",
-  imageGen: "gemini-2.0-flash-exp",
+  text: "gemini-2.5-flash",
+  imageGen: "gemini-2.0-flash-exp-image-generation",
 } as const;
