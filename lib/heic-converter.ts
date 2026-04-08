@@ -1,42 +1,73 @@
-// Load heic2any from CDN at runtime, bypassing Next.js/Turbopack bundler issues
-// This avoids WASM bundling problems that cause heic2any to fail when imported as a module
+// Load heic2any from CDN at runtime, bypassing Next.js/Turbopack bundler
+// heic2any uses libheif compiled to JS - works in all browsers including Chrome
 
-let heic2anyLoaded: ((options: { blob: Blob; toType: string; quality: number }) => Promise<Blob | Blob[]>) | null = null;
-let loadingPromise: Promise<void> | null = null;
+type Heic2AnyFn = (options: { blob: Blob; toType: string; quality: number }) => Promise<Blob | Blob[]>;
+
+let heic2anyFn: Heic2AnyFn | null = null;
+let loadPromise: Promise<void> | null = null;
 
 function loadHeic2any(): Promise<void> {
-  if (heic2anyLoaded) return Promise.resolve();
-  if (loadingPromise) return loadingPromise;
+  if (heic2anyFn) return Promise.resolve();
+  if (loadPromise) return loadPromise;
 
-  loadingPromise = new Promise<void>((resolve, reject) => {
-    const script = document.createElement("script");
-    script.src = "https://cdn.jsdelivr.net/npm/heic2any@0.0.4/dist/heic2any.min.js";
-    script.onload = () => {
-      // heic2any attaches to window as a global
-      const win = window as unknown as { heic2any: typeof heic2anyLoaded };
-      if (win.heic2any) {
-        heic2anyLoaded = win.heic2any;
-        resolve();
-      } else {
-        reject(new Error("heic2any loaded but not found on window"));
+  loadPromise = new Promise<void>((resolve, reject) => {
+    // Try multiple CDN sources for reliability
+    const urls = [
+      "https://unpkg.com/heic2any@0.0.4/dist/heic2any.js",
+      "https://cdn.jsdelivr.net/npm/heic2any@0.0.4/dist/heic2any.js",
+    ];
+
+    let urlIndex = 0;
+
+    function tryLoad() {
+      if (urlIndex >= urls.length) {
+        reject(new Error("Nao foi possivel carregar o decoder HEIC de nenhum CDN"));
+        return;
       }
-    };
-    script.onerror = () => reject(new Error("Failed to load HEIC decoder"));
-    document.head.appendChild(script);
+
+      const script = document.createElement("script");
+      script.src = urls[urlIndex];
+      script.onload = () => {
+        const win = window as unknown as Record<string, unknown>;
+        if (typeof win.heic2any === "function") {
+          heic2anyFn = win.heic2any as Heic2AnyFn;
+          console.log("[HEIC] Decoder loaded from", urls[urlIndex]);
+          resolve();
+        } else {
+          console.warn("[HEIC] Script loaded but heic2any not found on window, trying next CDN");
+          urlIndex++;
+          tryLoad();
+        }
+      };
+      script.onerror = () => {
+        console.warn("[HEIC] Failed to load from", urls[urlIndex]);
+        urlIndex++;
+        tryLoad();
+      };
+      document.head.appendChild(script);
+    }
+
+    tryLoad();
   });
 
-  return loadingPromise;
+  return loadPromise;
 }
 
 export async function convertHeicToJpeg(file: File): Promise<Blob> {
-  await loadHeic2any();
-  if (!heic2anyLoaded) throw new Error("HEIC decoder not available");
+  console.log("[HEIC] Starting conversion for", file.name, "size:", file.size);
 
-  const result = await heic2anyLoaded({
+  await loadHeic2any();
+  if (!heic2anyFn) throw new Error("HEIC decoder nao disponivel");
+
+  console.log("[HEIC] Decoder ready, converting...");
+
+  const result = await heic2anyFn({
     blob: file,
     toType: "image/jpeg",
     quality: 0.95,
   });
 
-  return Array.isArray(result) ? result[0] : result;
+  const blob = Array.isArray(result) ? result[0] : result;
+  console.log("[HEIC] Conversion done, result size:", blob.size);
+  return blob;
 }
