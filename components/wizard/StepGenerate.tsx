@@ -6,6 +6,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { ArrowLeft, Loader2, CheckCircle, XCircle } from "lucide-react";
 import { useEffect, useRef } from "react";
 import { generateId } from "@/lib/image-utils";
+import { composeSlideClient } from "@/lib/client-composer";
 import type { CarouselSlide } from "@/lib/types";
 
 export function StepGenerate() {
@@ -95,7 +96,7 @@ export function StepGenerate() {
         setGenerationProgress(Math.round(progress));
       }
 
-      // Phase 3: Compose (overlay text on images)
+      // Phase 3: Compose (overlay text on images) — done client-side for font support
       setGenerationPhase("composing");
       setGenerationProgress(75);
 
@@ -105,25 +106,17 @@ export function StepGenerate() {
         if (!genImage) continue;
 
         try {
-          const composeRes = await fetch("/api/compose", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              image: genImage,
-              text: { title: slide.title, body: slide.body, cta: slide.cta },
-              format: config.format,
-              brandColors: config.brandColors,
-              slideNumber: i + 1,
-              totalSlides: initialSlides.length,
-            }),
+          const composedBase64 = await composeSlideClient({
+            imageBase64: genImage,
+            text: { title: slide.title, body: slide.body, cta: slide.cta },
+            format: config.format,
+            brandColors: config.brandColors,
+            slideNumber: i + 1,
+            totalSlides: initialSlides.length,
           });
-
-          if (composeRes.ok) {
-            const { composedImage } = await composeRes.json();
-            updateSlide(slide.id, { composedImageBase64: composedImage });
-          }
-        } catch {
-          // Keep the un-composed image as fallback
+          updateSlide(slide.id, { composedImageBase64: composedBase64 });
+        } catch (err) {
+          console.error(`[compose] Slide ${i + 1} exception:`, err);
         }
       }
       setGenerationProgress(85);
