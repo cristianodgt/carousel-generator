@@ -1,3 +1,5 @@
+import { convertHeicToJpeg } from "./heic-converter";
+
 export function generateId(): string {
   return Math.random().toString(36).substring(2, 15);
 }
@@ -17,24 +19,14 @@ export function isImageFile(file: File): boolean {
   return imageExtensions.includes(ext || "");
 }
 
-// Convert image server-side via Sharp (handles HEIC, HEIF, AVIF, TIFF, etc.)
-async function convertOnServer(file: File): Promise<{ base64: string; mimeType: string; filename: string }> {
-  const formData = new FormData();
-  formData.append("file", file);
-
-  const res = await fetch("/api/convert", { method: "POST", body: formData });
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({ error: "Unknown error" }));
-    throw new Error(err.error || "Server conversion failed");
-  }
-  return res.json();
-}
-
-// Convert image client-side via Canvas (fast, works for JPG/PNG/WebP)
-function convertOnClient(file: File, maxDimension: number): Promise<{ base64: string; mimeType: string; filename: string }> {
+function canvasToResult(
+  blob: Blob,
+  fileName: string,
+  maxDimension: number
+): Promise<{ base64: string; mimeType: string; filename: string }> {
   return new Promise((resolve, reject) => {
     const img = new window.Image();
-    const url = URL.createObjectURL(file);
+    const url = URL.createObjectURL(blob);
 
     img.onload = () => {
       URL.revokeObjectURL(url);
@@ -49,20 +41,19 @@ function convertOnClient(file: File, maxDimension: number): Promise<{ base64: st
       ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
 
       canvas.toBlob(
-        (blob) => {
-          if (!blob) { reject(new Error("Canvas toBlob failed")); return; }
+        (result) => {
+          if (!result) { reject(new Error("Canvas export failed")); return; }
           const reader = new FileReader();
           reader.onload = () => {
             const dataUrl = reader.result as string;
-            const base64 = dataUrl.split(",")[1];
             resolve({
-              base64,
+              base64: dataUrl.split(",")[1],
               mimeType: OUTPUT_TYPE,
-              filename: file.name.replace(/\.[^.]+$/, ".jpg"),
+              filename: fileName.replace(/\.[^.]+$/, ".jpg"),
             });
           };
           reader.onerror = () => reject(new Error("FileReader failed"));
-          reader.readAsDataURL(blob);
+          reader.readAsDataURL(result);
         },
         OUTPUT_TYPE,
         0.95
@@ -71,28 +62,23 @@ function convertOnClient(file: File, maxDimension: number): Promise<{ base64: st
 
     img.onerror = () => {
       URL.revokeObjectURL(url);
-      reject(new Error("Browser cannot decode this image format"));
+      reject(new Error("Browser cannot decode this image"));
     };
 
     img.src = url;
   });
 }
 
-export async function processImage(file: File, maxDimension = 2048): Promise<{
-  base64: string;
-  mimeType: string;
-  filename: string;
-}> {
-  // HEIC/HEIF: always convert server-side (browsers can't decode it except Safari)
+export async function processImage(
+  file: File,
+  maxDimension = 2048
+): Promise<{ base64: string; mimeType: string; filename: string }> {
+  // HEIC/HEIF: decode via heic2any (loaded from CDN), then canvas
   if (isHeic(file)) {
-    return convertOnServer(file);
+    const jpegBlob = await convertHeicToJpeg(file);
+    return canvasToResult(jpegBlob, file.name, maxDimension);
   }
 
-  // Standard formats: try client-side first (faster), fallback to server
-  try {
-    return await convertOnClient(file, maxDimension);
-  } catch {
-    // If canvas fails (exotic format), try server-side
-    return convertOnServer(file);
-  }
+  // Standard formats: canvas directly
+  return canvasToResult(file, file.name, maxDimension);
 }
