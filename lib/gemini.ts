@@ -11,5 +11,5 @@ export function getGeminiClient(): GoogleGenAI {
 
 export const MODELS = {
   text: "gemini-2.5-flash",
-  imageGen: "gemini-2.5-flash-preview-image-generation",
+  imageGen: "gemini-3-pro-image-preview",
 } as const;
