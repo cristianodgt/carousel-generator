@@ -25,19 +25,40 @@ export function StepConfigure() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  async function downscaleBase64(base64: string, mimeType: string, maxDim = 512): Promise<string> {
+    return new Promise((resolve) => {
+      const img = new window.Image();
+      img.onload = () => {
+        const scale = Math.min(1, maxDim / Math.max(img.width, img.height));
+        const canvas = document.createElement("canvas");
+        canvas.width = Math.round(img.width * scale);
+        canvas.height = Math.round(img.height * scale);
+        const ctx = canvas.getContext("2d")!;
+        ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+        const dataUrl = canvas.toDataURL("image/jpeg", 0.6);
+        resolve(dataUrl.split(",")[1]);
+      };
+      img.onerror = () => resolve(base64); // fallback to original
+      img.src = `data:${mimeType};base64,${base64}`;
+    });
+  }
+
   async function runAnalysis() {
     setAnalyzing(true);
     setError(null);
     try {
+      // Downscale images for analysis (512px, low quality) to stay under Vercel 4.5MB body limit
+      const smallImages = await Promise.all(
+        uploadedImages.map(async (img) => ({
+          base64: await downscaleBase64(img.base64, img.mimeType),
+          mimeType: "image/jpeg",
+        }))
+      );
+
       const res = await fetch("/api/analyze", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          images: uploadedImages.map((img) => ({
-            base64: img.base64,
-            mimeType: img.mimeType,
-          })),
-        }),
+        body: JSON.stringify({ images: smallImages }),
       });
       if (!res.ok) throw new Error("Falha na analise");
       const data = await res.json();
