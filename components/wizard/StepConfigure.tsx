@@ -60,7 +60,10 @@ export function StepConfigure() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ images: smallImages }),
       });
-      if (!res.ok) throw new Error("Falha na analise");
+      if (!res.ok) {
+        const errData = await res.json().catch(() => ({ error: `HTTP ${res.status}` }));
+        throw new Error(errData.error || `HTTP ${res.status}`);
+      }
       const data = await res.json();
       setAnalysis(data.analysis);
       // Auto-fill config from analysis
