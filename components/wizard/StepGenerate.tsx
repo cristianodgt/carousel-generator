@@ -26,7 +26,7 @@ export function StepGenerate() {
 
   async function runGeneration() {
     try {
-      // Phase 1: Generate text content
+      // Phase 1: Generate text content via AI
       setGenerationPhase("generating-text");
       setGenerationProgress(10);
 
@@ -52,74 +52,74 @@ export function StepGenerate() {
         })
       );
       setSlides(initialSlides);
-      setGenerationProgress(20);
+      setGenerationProgress(25);
 
-      // Phase 2: Generate images sequentially (for consistency + rate limits)
+      // Phase 2: Enhance original photos (Sharp - deterministic, preserves person 100%)
+      // Distribute uploaded images across slides
       setGenerationPhase("generating-images");
-      const generatedImages: string[] = [];
 
       for (let i = 0; i < initialSlides.length; i++) {
         const slide = initialSlides[i];
         updateSlide(slide.id, { status: "generating" });
 
-        try {
-          // Send the reference image for this specific slide (distribute across slides)
-          // Plus 1-2 others for style consistency
-          const primaryImageIndex = i % uploadedImages.length;
-          const slideRefImages = [
-            uploadedImages[primaryImageIndex],
-            ...uploadedImages.filter((_, idx) => idx !== primaryImageIndex).slice(0, 1),
-          ].map((img) => ({ base64: img.base64, mimeType: img.mimeType }));
+        // Pick the uploaded image for this slide (cycle through them)
+        const imgIndex = i % uploadedImages.length;
+        const sourceImage = uploadedImages[imgIndex];
 
-          const imageRes = await fetch("/api/generate-image", {
+        try {
+          // Enhance photo via Sharp (crop, brightness, saturation, sharpen)
+          const enhanceRes = await fetch("/api/enhance", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
-              prompt: slide.imagePrompt,
-              referenceImages: slideRefImages,
-              previousSlides: generatedImages.slice(-1),
-              brandColors: config.brandColors,
+              image: sourceImage.base64,
               format: config.format,
             }),
           });
 
-          if (!imageRes.ok) throw new Error(`Falha no slide ${i + 1}`);
-          const { image } = await imageRes.json();
-
-          generatedImages.push(image);
-          updateSlide(slide.id, { generatedImageBase64: image, status: "done" });
+          if (enhanceRes.ok) {
+            const { image } = await enhanceRes.json();
+            updateSlide(slide.id, { generatedImageBase64: image, status: "done" });
+          } else {
+            // Fallback: use original image directly
+            updateSlide(slide.id, { generatedImageBase64: sourceImage.base64, status: "done" });
+          }
         } catch {
-          updateSlide(slide.id, { status: "error" });
+          // Fallback: use original image directly
+          updateSlide(slide.id, { generatedImageBase64: sourceImage.base64, status: "done" });
         }
 
-        const progress = 20 + ((i + 1) / initialSlides.length) * 50;
+        const progress = 25 + ((i + 1) / initialSlides.length) * 30;
         setGenerationProgress(Math.round(progress));
       }
 
-      // Phase 3: Compose (overlay text on images) — done client-side for font support
+      // Phase 3: Compose text overlays on images (client-side Canvas)
       setGenerationPhase("composing");
-      setGenerationProgress(75);
+      setGenerationProgress(60);
 
-      for (let i = 0; i < initialSlides.length; i++) {
-        const slide = initialSlides[i];
-        const genImage = generatedImages[i];
-        if (!genImage) continue;
+      // Re-read slides from store to get the enhanced images
+      const currentSlides = useCarouselStore.getState().slides;
+
+      for (let i = 0; i < currentSlides.length; i++) {
+        const slide = currentSlides[i];
+        const baseImage = slide.generatedImageBase64;
+        if (!baseImage) continue;
 
         try {
           const composedBase64 = await composeSlideClient({
-            imageBase64: genImage,
+            imageBase64: baseImage,
             text: { title: slide.title, body: slide.body, cta: slide.cta },
             format: config.format,
             brandColors: config.brandColors,
             slideNumber: i + 1,
-            totalSlides: initialSlides.length,
+            totalSlides: currentSlides.length,
           });
           updateSlide(slide.id, { composedImageBase64: composedBase64 });
         } catch (err) {
-          console.error(`[compose] Slide ${i + 1} exception:`, err);
+          console.error(`[compose] Slide ${i + 1} error:`, err);
         }
       }
-      setGenerationProgress(85);
+      setGenerationProgress(80);
 
       // Phase 4: Generate caption
       setGenerationPhase("generating-caption");
@@ -160,8 +160,8 @@ export function StepGenerate() {
     idle: "Preparando...",
     analyzing: "Analisando imagens...",
     "generating-text": "Gerando textos do carrossel...",
-    "generating-images": "Gerando imagens dos slides...",
-    composing: "Compondo slides finais...",
+    "generating-images": "Aprimorando fotos...",
+    composing: "Compondo slides com texto...",
     "generating-caption": "Gerando legenda otimizada...",
     done: "Concluido!",
     error: "Erro na geracao",
@@ -172,7 +172,7 @@ export function StepGenerate() {
       <div>
         <h2 className="text-2xl font-bold">Gerando seu carrossel</h2>
         <p className="text-muted-foreground mt-1">
-          A IA esta criando textos, imagens e legenda para seu carrossel.
+          A IA esta criando textos e legenda. Suas fotos originais serao usadas com aprimoramento profissional.
         </p>
       </div>
 
